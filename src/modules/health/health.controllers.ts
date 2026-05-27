@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../utils/prisma.utils';
 import { envConfig } from '../../config';
 import { indexerHeartbeat } from '../../utils/heartbeat.service';
+import { checkIndexerCursorStalenessFromStore } from '../../utils/indexer-cursor-staleness.utils';
 import { sendSuccess } from '../../utils/api-response.utils';
 import { PUBLIC_ENDPOINT_CACHE_SECONDS } from '../../constants/public-endpoint-cache.constants';
 
@@ -173,8 +174,12 @@ export const indexerHeartbeatCheck = (_: Request, res: Response): void => {
  * POST /health/indexer/heartbeat
  * Called by the indexer worker to record a successful run.
  */
-export const recordIndexerHeartbeat = (_: Request, res: Response): void => {
+export const recordIndexerHeartbeat = async (
+  _: Request,
+  res: Response
+): Promise<void> => {
   const timestamp = indexerHeartbeat.recordHeartbeat();
+  await checkIndexerCursorStalenessFromStore({ job: 'indexer' });
   sendSuccess(
     res,
     { recorded: true, timestamp: timestamp.toISOString() },

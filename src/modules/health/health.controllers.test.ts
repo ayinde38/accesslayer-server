@@ -19,13 +19,23 @@ jest.mock('../../utils/prisma.utils', () => ({
    },
 }));
 
+jest.mock('../../utils/indexer-cursor-staleness.utils', () => ({
+   checkIndexerCursorStalenessFromStore: jest.fn().mockResolvedValue(undefined),
+}));
+
 import {
    indexerHeartbeatCheck,
    recordIndexerHeartbeat,
    readinessCheck,
 } from './health.controllers';
 import { indexerHeartbeat } from '../../utils/heartbeat.service';
+import { checkIndexerCursorStalenessFromStore } from '../../utils/indexer-cursor-staleness.utils';
 import { prisma } from '../../utils/prisma.utils';
+
+const checkCursorStalenessMock =
+   checkIndexerCursorStalenessFromStore as jest.MockedFunction<
+      typeof checkIndexerCursorStalenessFromStore
+   >;
 
 const queryRawMock = prisma.$queryRaw as unknown as jest.Mock;
 
@@ -118,13 +128,14 @@ describe('Indexer Heartbeat Controllers', () => {
    describe('recordIndexerHeartbeat', () => {
       beforeEach(() => {
          indexerHeartbeat.reset();
+         checkCursorStalenessMock.mockClear();
       });
 
-      it('records a heartbeat and returns 200', () => {
+      it('records a heartbeat and returns 200', async () => {
          const req = mockRequest();
          const res = mockResponse();
 
-         recordIndexerHeartbeat(req, res);
+         await recordIndexerHeartbeat(req, res);
 
          expect(res.statusCode).toBe(200);
          expect(res.body).toEqual(
@@ -139,13 +150,22 @@ describe('Indexer Heartbeat Controllers', () => {
          );
       });
 
-      it('makes the indexer status healthy', () => {
+      it('makes the indexer status healthy', async () => {
          const req = mockRequest();
          const res = mockResponse();
 
-         recordIndexerHeartbeat(req, res);
+         await recordIndexerHeartbeat(req, res);
 
          expect(indexerHeartbeat.getStatus().status).toBe('healthy');
+      });
+
+      it('checks indexer cursor staleness after recording a heartbeat', async () => {
+         const req = mockRequest();
+         const res = mockResponse();
+
+         await recordIndexerHeartbeat(req, res);
+
+         expect(checkCursorStalenessMock).toHaveBeenCalledWith({ job: 'indexer' });
       });
    });
 });
