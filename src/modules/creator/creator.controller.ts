@@ -16,6 +16,8 @@ import { wrapPublicCreatorListResponse } from '../creators/public-creator-list-e
 import { buildCreatorListRequestContext } from '../creators/creator-list-context.utils';
 import { warnIfUnrecognizedCreatorListSort } from '../creators/creators.sort-field.utils';
 import { normalizeCreatorListPage } from './creator-list-page.guard';
+import { logCreatorRouteColdStart } from './creator-observability.utils';
+import { logger } from '../../utils/logger.utils';
 
 // Legacy query schema
 import { LegacyCreatorQuerySchema } from '../creators/creators.schemas';
@@ -69,70 +71,84 @@ function pickFields<T extends Record<string, unknown>>(
 
 // Typed Express handler
 export const listCreators: RequestHandler = async (req, res) => {
-  try {
-    // Build request context
-    const ctx = buildCreatorListRequestContext(req);
+   try {
+      logCreatorRouteColdStart('listCreators', req.requestId);
 
-    warnIfUnrecognizedCreatorListSort(ctx.query, req.requestId);
+      // Build request context
+      const ctx = buildCreatorListRequestContext(req);
 
-    // Parse query using legacy schema
-    const parsed = parsePublicQuery(
-      LegacyCreatorQuerySchema, 
-      ctx.query,
-      { debugContext: 'legacy-creator-list-query' }
-    );
+      warnIfUnrecognizedCreatorListSort(ctx.query, req.requestId);
 
-    if (!parsed.ok) {
-      return sendValidationError(res, 'Invalid query parameters', parsed.details);
-    }
+      // Parse query using legacy schema
+      const parsed = parsePublicQuery(
+         LegacyCreatorQuerySchema,
+         ctx.query,
+         { debugContext: 'legacy-creator-list-query' }
+      );
 
-    const selectedFields = parseSelectFields(ctx.query['select-fields']);
-    const invalidFields = getInvalidSelectFields(selectedFields);
+      if (!parsed.ok) {
+         return sendValidationError(
+            res,
+            'Invalid query parameters',
+            parsed.details
+         );
+      }
 
-    if (invalidFields.length > 0) {
-      return sendValidationError(res, 'Invalid query parameters', [
-        {
-          field: 'select-fields',
-          message: `Invalid select-fields: ${invalidFields.join(', ')}`,
-        },
-      ]);
-    }
+      const selectedFields = parseSelectFields(ctx.query['select-fields']);
+      const invalidFields = getInvalidSelectFields(selectedFields);
 
-    // Destructure using schema fields
-    const { offset, limit, sort, order: sortOrder } = parsed.data;
+      if (invalidFields.length > 0) {
+         return sendValidationError(res, 'Invalid query parameters', [
+            {
+               field: 'select-fields',
+               message: `Invalid select-fields: ${invalidFields.join(', ')}`,
+            },
+         ]);
+      }
 
-    // Convert offset to page number
-    const page = normalizeCreatorListPage(offset);
+      // Destructure using schema fields
+      const { offset, limit, sort, order: sortOrder } = parsed.data;
 
-    // Build sort options
-    const sortOptions = parseCreatorSortOptions(sort, sortOrder);
+      // Convert offset to page number
+      const page = normalizeCreatorListPage(offset);
 
-    // Fetch paginated creators
-    const { creators, meta } = await getPaginatedCreators({
-      page,
-      limit,
-      sort: sortOptions,
-    });
+      // Build sort options
+      const sortOptions = parseCreatorSortOptions(sort, sortOrder);
 
-    const response = wrapPublicCreatorListResponse(creators, meta);
-    attachTimestampHeader(res);
-    const filteredItems = Array.isArray(response.items)
-      ? response.items.map((item) =>
-          pickFields(item as Record<string, unknown>, selectedFields)
-        )
-      : response.items;
+      // Fetch paginated creators
+      const { creators, meta } = await getPaginatedCreators({
+         page,
+         limit,
+         sort: sortOptions,
+      });
 
-    return sendSuccess(
-      res,
-      {
-        ...response,
-        items: filteredItems,
-      },
-      200,
-      'Creators retrieved successfully'
-    );
-  } catch (error) {
-    console.error('Error listing creators:', error);
-    return sendError(res, 500, ErrorCode.INTERNAL_ERROR, 'Failed to retrieve creators');
-  }
+      const response = wrapPublicCreatorListResponse(creators, meta);
+      attachTimestampHeader(res);
+      const filteredItems = Array.isArray(response.items)
+         ? response.items.map((item) =>
+              pickFields(item as Record<string, unknown>, selectedFields)
+           )
+         : response.items;
+
+      return sendSuccess(
+         res,
+         {
+            ...response,
+            items: filteredItems,
+         },
+         200,
+         'Creators retrieved successfully'
+      );
+   } catch (error) {
+      logger.error(
+         {
+            type: 'creator_list_handler_error',
+            handler: 'listCreators',
+            ...(req.requestId ? { requestId: req.requestId } : {}),
+            error,
+         },
+         'Error listing creators'
+      );
+      return sendError(res, 500, ErrorCode.INTERNAL_ERROR, 'Failed to retrieve creators');
+   }
 };

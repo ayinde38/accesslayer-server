@@ -1,4 +1,5 @@
 import { prisma } from '../../utils/prisma.utils';
+import { logger } from '../../utils/logger.utils';
 import {
    CreatorProfileReadResponse,
    UpsertCreatorProfileBody,
@@ -30,7 +31,13 @@ export async function getCreatorProfile(
    });
 
    if (!profile) {
-      console.warn(buildCreatorDetailCacheMissContext(creatorId));
+      logger.warn(
+         {
+            ...buildCreatorDetailCacheMissContext(creatorId),
+            type: 'creator_profile_cache_miss',
+         },
+         'Creator profile cache miss; returning placeholder response'
+      );
 
       // Fallback for placeholder behavior if profile not found
       return {

@@ -7,6 +7,8 @@
 import { httpListCreators } from './creators.controllers';
 import * as creatorsUtils from './creators.utils';
 import { logger } from '../../utils/logger.utils';
+import { resolveCreatorListLimit } from './creators.limit.utils';
+import { PUBLIC_OFFSET_PAGINATION_DEFAULTS } from '../../utils/public-list-query-defaults';
 
 // ── Lightweight request/response mocks ────────────────────────────────────────
 
@@ -109,16 +111,46 @@ describe('GET /api/v1/creators — empty feed with filter combinations', () => {
       expect(body.data.meta.offset).toBe(0);
    });
 
-   it('applies default sort when not specified', async () => {
-      const req = makeReq();
-      const res = makeRes();
-      await httpListCreators(req, res, makeNext());
+   it('treats explicit defaults the same as omitted filter params', async () => {
+      const omittedReq = makeReq();
+      const omittedRes = makeRes();
+      await httpListCreators(omittedReq, omittedRes, makeNext());
 
-      expect(creatorsUtils.fetchCreatorList).toHaveBeenCalledWith(
+      const explicitDefaultsReq = makeReq({
+         limit: String(resolveCreatorListLimit()),
+         offset: String(PUBLIC_OFFSET_PAGINATION_DEFAULTS.offset),
+         sort: 'createdAt',
+         order: 'desc',
+         search: '   ',
+         include: '   ',
+      });
+      const explicitDefaultsRes = makeRes();
+      await httpListCreators(explicitDefaultsReq, explicitDefaultsRes, makeNext());
+
+      expect(creatorsUtils.fetchCreatorList).toHaveBeenNthCalledWith(
+         1,
          expect.objectContaining({
-            sort: expect.any(String),
-            order: expect.any(String),
+            sort: 'createdAt',
+            order: 'desc',
          })
+      );
+      expect(creatorsUtils.fetchCreatorList).toHaveBeenNthCalledWith(
+         2,
+         expect.objectContaining({
+            limit: resolveCreatorListLimit(),
+            offset: PUBLIC_OFFSET_PAGINATION_DEFAULTS.offset,
+            sort: 'createdAt',
+            order: 'desc',
+         })
+      );
+
+      const explicitCallArgs = (creatorsUtils.fetchCreatorList as jest.Mock).mock
+         .calls[1][0];
+      expect(explicitCallArgs).not.toHaveProperty('search');
+      expect(explicitCallArgs).not.toHaveProperty('include');
+
+      expect(explicitDefaultsRes.json.mock.calls[0][0]).toEqual(
+         omittedRes.json.mock.calls[0][0]
       );
    });
 

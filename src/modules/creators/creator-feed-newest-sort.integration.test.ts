@@ -7,7 +7,7 @@
 
 import { httpListCreators } from './creators.controllers';
 import * as creatorsUtils from './creators.utils';
-import type { CreatorProfile } from '../../types/profile.types';
+import { buildCreatorRegistrationFixtures } from './creator-registration-fixtures.utils';
 
 // ── Lightweight request/response mocks ────────────────────────────────────────
 
@@ -30,35 +30,8 @@ function makeNext(): jest.Mock {
 
 // ── Fixtures with distinct registration timestamps ────────────────────────────
 
-const FIXTURE_OLDEST: CreatorProfile = {
-   id: 'cuid-oldest',
-   userId: 'user-oldest',
-   handle: 'oldest_creator',
-   displayName: 'Oldest Creator',
-   isVerified: false,
-   createdAt: new Date('2023-01-01T00:00:00.000Z'),
-   updatedAt: new Date('2023-01-01T00:00:00.000Z'),
-};
-
-const FIXTURE_MIDDLE: CreatorProfile = {
-   id: 'cuid-middle',
-   userId: 'user-middle',
-   handle: 'middle_creator',
-   displayName: 'Middle Creator',
-   isVerified: false,
-   createdAt: new Date('2023-06-15T00:00:00.000Z'),
-   updatedAt: new Date('2023-06-15T00:00:00.000Z'),
-};
-
-const FIXTURE_NEWEST: CreatorProfile = {
-   id: 'cuid-newest',
-   userId: 'user-newest',
-   handle: 'newest_creator',
-   displayName: 'Newest Creator',
-   isVerified: true,
-   createdAt: new Date('2024-03-01T00:00:00.000Z'),
-   updatedAt: new Date('2024-03-01T00:00:00.000Z'),
-};
+const [FIXTURE_OLDEST, FIXTURE_MIDDLE, FIXTURE_NEWEST] =
+   buildCreatorRegistrationFixtures(3, '2023-01-01T00:00:00.000Z', 90);
 
 // Intentionally out of order to confirm the mock drives the assertion
 const FIXTURES_ASCENDING = [FIXTURE_OLDEST, FIXTURE_MIDDLE, FIXTURE_NEWEST];

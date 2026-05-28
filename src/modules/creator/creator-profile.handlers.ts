@@ -5,6 +5,7 @@ import {
    sendValidationError,
    ErrorCode,
 } from '../../utils/api-response.utils';
+import { logger } from '../../utils/logger.utils';
 import {
    CreatorProfileParamsSchema,
    UpsertCreatorProfileBodySchema,
@@ -13,6 +14,7 @@ import {
    getCreatorProfile,
    upsertCreatorProfile,
 } from './creator-profile.service';
+import { logCreatorRouteColdStart } from './creator-observability.utils';
 
 /**
  * @route GET /api/v1/creators/:creatorId/profile
@@ -21,6 +23,8 @@ import {
  */
 export async function getCreatorProfileHandler(req: Request, res: Response) {
    try {
+      logCreatorRouteColdStart('getCreatorProfileHandler', req.requestId);
+
       const paramsResult = CreatorProfileParamsSchema.safeParse(req.params);
       if (!paramsResult.success) {
          return sendValidationError(
@@ -36,7 +40,15 @@ export async function getCreatorProfileHandler(req: Request, res: Response) {
       const profile = await getCreatorProfile(paramsResult.data.creatorId);
       return sendSuccess(res, profile, 200, 'Creator profile retrieved');
    } catch (error) {
-      console.error('Error retrieving creator profile:', error);
+      logger.error(
+         {
+            type: 'creator_profile_handler_error',
+            handler: 'getCreatorProfileHandler',
+            ...(req.requestId ? { requestId: req.requestId } : {}),
+            error,
+         },
+         'Error retrieving creator profile'
+      );
       return sendError(
          res,
          500,
@@ -53,6 +65,8 @@ export async function getCreatorProfileHandler(req: Request, res: Response) {
  */
 export async function upsertCreatorProfileHandler(req: Request, res: Response) {
    try {
+      logCreatorRouteColdStart('upsertCreatorProfileHandler', req.requestId);
+
       const paramsResult = CreatorProfileParamsSchema.safeParse(req.params);
       if (!paramsResult.success) {
          return sendValidationError(
@@ -88,7 +102,15 @@ export async function upsertCreatorProfileHandler(req: Request, res: Response) {
          'Creator profile write accepted (placeholder)'
       );
    } catch (error) {
-      console.error('Error upserting creator profile:', error);
+      logger.error(
+         {
+            type: 'creator_profile_handler_error',
+            handler: 'upsertCreatorProfileHandler',
+            ...(req.requestId ? { requestId: req.requestId } : {}),
+            error,
+         },
+         'Error upserting creator profile'
+      );
       return sendError(
          res,
          500,
